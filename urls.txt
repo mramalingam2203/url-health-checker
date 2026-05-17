@@ -1,0 +1,5 @@
+https://google.com
+https://github.com
+https://golang.org
+https://httpstat.us/503
+https://doesnotexist.xyz
