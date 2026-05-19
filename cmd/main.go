@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"healthchecker/internal/checker"
@@ -19,8 +20,29 @@ func main() {
 		Timeout: 5 * time.Second,
 	}
 
+	results := make(chan checker.URLResult)
+
+	var wg sync.WaitGroup
+
 	for _, url := range urls {
-		result := checker.CheckURL(client, url)
+		wg.Add(1)
+
+		go func(u string) {
+			defer wg.Done()
+
+			result := checker.CheckURL(client, u)
+
+			results <- result
+
+		}(url)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	for result := range results {
 		output.PrintResult(result)
 	}
 }
