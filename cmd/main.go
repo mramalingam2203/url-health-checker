@@ -20,28 +20,41 @@ func main() {
 		Timeout: 5 * time.Second,
 	}
 
+	jobs := make(chan string)
 	results := make(chan checker.URLResult)
 
 	var wg sync.WaitGroup
 
-	for _, url := range urls {
+	workerCount := 5
+
+	// Start workers
+	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 
-		go func(u string) {
-			defer wg.Done()
-
-			result := checker.CheckURL(client, u)
-
-			results <- result
-
-		}(url)
+		go checker.Worker(
+			client,
+			jobs,
+			results,
+			&wg,
+		)
 	}
 
+	// Send jobs
+	go func() {
+		for _, url := range urls {
+			jobs <- url
+		}
+
+		close(jobs)
+	}()
+
+	// Close results after workers finish
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
+	// Collect results
 	for result := range results {
 		output.PrintResult(result)
 	}
