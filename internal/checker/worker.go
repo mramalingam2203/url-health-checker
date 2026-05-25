@@ -1,12 +1,14 @@
 package checker
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
 )
 
 func Worker(
+	ctx context.Context,
 	client *http.Client,
 	jobs <-chan string,
 	results chan<- URLResult,

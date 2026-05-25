@@ -1,12 +1,14 @@
 package checker
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
 )
 
 func RunChecks(
+	ctx context.Context,
 	client *http.Client,
 	urls []string,
 	workerCount int,
@@ -26,6 +28,7 @@ func RunChecks(
 		wg.Add(1)
 
 		go Worker(
+			ctx,
 			client,
 			jobs,
 			results,

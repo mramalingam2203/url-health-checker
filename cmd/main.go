@@ -1,17 +1,32 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"net/http"
-	"time"
-
 	"healthchecker/internal/checker"
 	"healthchecker/internal/output"
 	"healthchecker/internal/reader"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 func main() {
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	signalChan := make(chan os.Signal, 1)
+
+	signal.Notify(
+		signalChan,
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
 
 	// =========================
 	// CLI FLAGS
@@ -105,6 +120,7 @@ func main() {
 		go func() {
 
 			checker.RunChecks(
+				ctx,
 				client,
 				urls,
 				*workers,
@@ -127,6 +143,18 @@ func main() {
 		fmt.Println()
 	}
 
+	go func() {
+
+		<-signalChan
+
+		fmt.Println()
+		fmt.Println("Shutdown signal received...")
+		fmt.Println("Stopping gracefully...")
+
+		cancel()
+
+	}()
+
 	// =========================
 	// RUN ONCE OR WATCH MODE
 	// =========================
@@ -141,16 +169,27 @@ func main() {
 		// Continuous monitoring
 		for {
 
-			runCycle()
+			select {
 
-			fmt.Printf(
-				"Sleeping for %d seconds...\n\n",
-				*watch,
-			)
+			case <-ctx.Done():
 
-			time.Sleep(
-				time.Duration(*watch) * time.Second,
-			)
+				fmt.Println("Monitoring stopped.")
+
+				return
+
+			default:
+
+				runCycle()
+
+				fmt.Printf(
+					"Sleeping for %d seconds...\n\n",
+					*watch,
+				)
+
+				time.Sleep(
+					time.Duration(*watch) * time.Second,
+				)
+			}
 		}
 	}
 }
