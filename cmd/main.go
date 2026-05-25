@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"healthchecker/internal/checker"
@@ -12,6 +12,10 @@ import (
 )
 
 func main() {
+
+	// =========================
+	// CLI FLAGS
+	// =========================
 
 	workers := flag.Int(
 		"workers",
@@ -31,10 +35,6 @@ func main() {
 		"HTTP timeout in seconds",
 	)
 
-	client := &http.Client{
-		Timeout: time.Duration(*timeout) * time.Second,
-	}
-
 	retries := flag.Int(
 		"retries",
 		3,
@@ -53,7 +53,34 @@ func main() {
 		"maximum requests per second",
 	)
 
+	watch := flag.Int(
+		"watch",
+		0,
+		"repeat checks every N seconds (0 = run once)",
+	)
+
 	flag.Parse()
+
+	// =========================
+	// READ URLS
+	// =========================
+
+	urls, err := reader.ReadURLs(*inputFile)
+	if err != nil {
+		panic(err)
+	}
+
+	// =========================
+	// HTTP CLIENT
+	// =========================
+
+	client := &http.Client{
+		Timeout: time.Duration(*timeout) * time.Second,
+	}
+
+	// =========================
+	// RATE LIMITER
+	// =========================
 
 	interval := time.Second / time.Duration(*rateLimit)
 
@@ -61,49 +88,69 @@ func main() {
 
 	defer ticker.Stop()
 
-	urls, err := reader.ReadURLs(*inputFile)
-	if err != nil {
-		panic(err)
-	}
+	// =========================
+	// SINGLE MONITORING CYCLE
+	// =========================
 
-	jobs := make(chan string)
-	results := make(chan checker.URLResult)
+	runCycle := func() {
 
-	var wg sync.WaitGroup
+		fmt.Println("===================================")
+		fmt.Println("Starting Health Check Cycle")
+		fmt.Println("Time:", time.Now().Format(time.RFC3339))
+		fmt.Println("===================================")
 
-	workerCount := *workers
-	// Start workers
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
+		results := make(chan checker.URLResult)
 
-		go checker.Worker(
-			client,
-			jobs,
-			results,
-			&wg,
-			*retries,
-			time.Duration(*retryDelay)*time.Second,
-			ticker.C,
-		)
-	}
+		// Run checks concurrently
+		go func() {
 
-	// Send jobs
-	go func() {
-		for _, url := range urls {
-			jobs <- url
+			checker.RunChecks(
+				client,
+				urls,
+				*workers,
+				*retries,
+				time.Duration(*retryDelay)*time.Second,
+				ticker.C,
+				results,
+			)
+
+			close(results)
+
+		}()
+
+		// Collect results
+		for result := range results {
+			output.PrintResult(result)
 		}
 
-		close(jobs)
-	}()
+		fmt.Println("Health Check Cycle Completed")
+		fmt.Println()
+	}
 
-	// Close results after workers finish
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+	// =========================
+	// RUN ONCE OR WATCH MODE
+	// =========================
 
-	// Collect results
-	for result := range results {
-		output.PrintResult(result)
+	if *watch == 0 {
+
+		// Run once
+		runCycle()
+
+	} else {
+
+		// Continuous monitoring
+		for {
+
+			runCycle()
+
+			fmt.Printf(
+				"Sleeping for %d seconds...\n\n",
+				*watch,
+			)
+
+			time.Sleep(
+				time.Duration(*watch) * time.Second,
+			)
+		}
 	}
 }
