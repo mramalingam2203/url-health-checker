@@ -3,6 +3,7 @@ package checker
 import (
 	"net/http"
 	"sync"
+	"time"
 )
 
 func Worker(
@@ -10,11 +11,23 @@ func Worker(
 	jobs <-chan string,
 	results chan<- URLResult,
 	wg *sync.WaitGroup,
+	maxRetries int,
+	retryDelay time.Duration,
+	limiter <-chan time.Time,
 ) {
 	defer wg.Done()
 
 	for url := range jobs {
-		result := CheckURL(client, url)
+
+		// Wait for rate-limit token
+		<-limiter
+
+		result := CheckURL(
+			client,
+			url,
+			maxRetries,
+			retryDelay,
+		)
 
 		results <- result
 	}

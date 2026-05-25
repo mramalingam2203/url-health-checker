@@ -5,29 +5,45 @@ import (
 	"time"
 )
 
-func CheckURL(client *http.Client, url string) URLResult {
-	start := time.Now()
+func CheckURL(
+	client *http.Client,
+	url string,
+	maxRetries int,
+	retryDelay time.Duration,
+) URLResult {
 
-	resp, err := client.Get(url)
+	var lastErr error
 
-	latency := time.Since(start)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
 
-	if err != nil {
-		return URLResult{
-			URL:     url,
-			Latency: latency,
-			Success: false,
-			Error:   err.Error(),
+		start := time.Now()
+
+		resp, err := client.Get(url)
+
+		latency := time.Since(start)
+
+		if err == nil {
+			defer resp.Body.Close()
+
+			return URLResult{
+				URL:        url,
+				StatusCode: resp.StatusCode,
+				Status:     resp.Status,
+				Latency:    latency,
+				Success:    true,
+				Attempts:   attempt,
+			}
 		}
+
+		lastErr = err
+
+		time.Sleep(retryDelay)
 	}
 
-	defer resp.Body.Close()
-
 	return URLResult{
-		URL:        url,
-		StatusCode: resp.StatusCode,
-		Status:     resp.Status,
-		Latency:    latency,
-		Success:    true,
+		URL:      url,
+		Success:  false,
+		Error:    lastErr.Error(),
+		Attempts: maxRetries,
 	}
 }

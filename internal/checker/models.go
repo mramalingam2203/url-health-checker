@@ -9,4 +9,5 @@ type URLResult struct {
 	Latency    time.Duration
 	Success    bool
 	Error      string
+	Attempts   int
 }

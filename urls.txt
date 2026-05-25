@@ -3,3 +3,4 @@ https://github.com
 https://golang.org
 https://httpstat.us/503
 https://doesnotexist.xyz
+https://go4-consulting.vercel.app/
