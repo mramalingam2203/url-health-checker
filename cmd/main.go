@@ -94,6 +94,16 @@ func main() {
 	}
 
 	// =========================
+	// FORMAT
+	// =========================
+
+	format := flag.String(
+		"format",
+		"console",
+		"output format: console|json|csv",
+	)
+
+	// =========================
 	// RATE LIMITER
 	// =========================
 
@@ -134,13 +144,37 @@ func main() {
 
 		}()
 
-		// Collect results
+		var collectedResults []checker.URLResult
+
 		for result := range results {
-			output.PrintResult(result)
+
+			collectedResults = append(
+				collectedResults,
+				result,
+			)
+
+			switch *format {
+
+			case "json":
+				output.PrintJSON(result)
+
+			case "csv":
+				output.PrintCSV(result)
+
+			default:
+				output.PrintResult(result)
+			}
 		}
 
-		fmt.Println("Health Check Cycle Completed")
-		fmt.Println()
+		// =========================
+		// METRICS SUMMARY
+		// =========================
+
+		metrics := checker.CalculateMetrics(
+			collectedResults,
+		)
+
+		output.PrintMetrics(metrics)
 	}
 
 	go func() {
